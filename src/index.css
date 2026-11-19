@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #F5F2EB;
+  --color-paper-card: #FFFDF9;
+  --color-paper-muted: #EBE6DC;
+  --color-ink: #141413;
+  --color-ink-secondary: #68645B;
+  --color-ink-tertiary: #9A958A;
+  --color-hairline: #DED8CC;
+  --color-accent-orange: #FF4D1A;
+  --color-accent-orange-soft: #FFF0EB;
+  --color-accent-green: #0D9468;
+  --color-accent-green-soft: #E9F7F1;
+
+  --font-sans: "Space Grotesk", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--font-sans);
+    background-color: #ECE8DF;
+    color: #141413;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+.tabular-money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 热敏小票锯齿底边 */
+.receipt-zig-zag-bottom {
+  position: relative;
+}
+
+.receipt-zig-zag-bottom::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 6px;
+  background-image: linear-gradient(135deg, #FFFDF9 50%, transparent 50%),
+    linear-gradient(225deg, #FFFDF9 50%, transparent 50%);
+  background-position: 0 0;
+  background-size: 12px 6px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 2px 1px rgba(20, 20, 19, 0.06));
+}
+
+/* 细微纸张颗粒纹理 */
+.paper-texture {
+  background-color: #F5F2EB;
+  background-image: radial-gradient(rgba(20, 20, 19, 0.03) 0.75px, transparent 0.75px);
+  background-size: 10px 10px;
+}
+
+/* 隐藏滚动条但保留滚动能力 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 底部安全区适配 */
+.pb-safe {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: slideUpSheet 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-backdrop {
+  animation: fadeInBackdrop 0.18s ease-out forwards;
+}
