@@ -460,20 +460,19 @@ export async function generateReceiptImage(
       ctx.textAlign = 'right';
       ctx.font = `700 26px ${FONT_MONO}`;
       ctx.fillStyle = isSettled ? '#0D9468' : '#FF4D1A';
-      ctx.fillText(
-        formatMoney(tr.amountCents, bill.currency),
-        right - 20,
-        y + 46
-      );
+      const amountText = formatMoney(tr.amountCents, bill.currency);
+      const amountWidth = ctx.measureText(amountText).width;
+      ctx.fillText(amountText, right - 20, y + 46);
 
       if (isSettled) {
-        // 复古已结清小印章
+        // 复古已结清小印章（动态置于金额左侧留白处，绝不重叠）
+        const stampCenterX = Math.max(left + 210, right - 20 - amountWidth - 58);
         ctx.save();
-        ctx.translate(right - 160, y + 36);
-        ctx.rotate(-0.12);
+        ctx.translate(stampCenterX, y + 37);
+        ctx.rotate(-0.1);
         ctx.strokeStyle = '#0D9468';
         ctx.lineWidth = 2;
-        ctx.strokeRect(-42, -16, 84, 30);
+        ctx.strokeRect(-40, -15, 80, 28);
         ctx.font = `700 14px ${FONT_MONO}`;
         ctx.textAlign = 'center';
         ctx.fillStyle = '#0D9468';
