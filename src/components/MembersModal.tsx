@@ -69,7 +69,7 @@ export function MembersModal({
               参与成员 ({members.length})
             </h2>
             <p className="text-[11px] text-[#68645B]">
-              点击头像可切换可爱图标（{MEMBER_AVATARS.length} 款）
+              点击徽章可切换 {MEMBER_AVATARS.length} 款瑞士印刷体印章
             </p>
           </div>
           <button

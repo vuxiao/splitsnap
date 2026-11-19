@@ -35,11 +35,11 @@ export function createMember(name: string, index: number): Member {
 export function createSampleBill(): Bill {
   const now = Date.now();
   const members: Member[] = [
-    { id: 'm1', name: '阿杰', color: MEMBER_PALETTE[0], avatar: '🦊' },
-    { id: 'm2', name: '林溪', color: MEMBER_PALETTE[1], avatar: '🐼' },
-    { id: 'm3', name: '老周', color: MEMBER_PALETTE[2], avatar: '🐻' },
-    { id: 'm4', name: '小美', color: MEMBER_PALETTE[3], avatar: '🐰' },
-    { id: 'm5', name: '大宇', color: MEMBER_PALETTE[4], avatar: '🦁' },
+    { id: 'm1', name: '阿杰', color: MEMBER_PALETTE[0], avatar: MEMBER_AVATARS[0] },
+    { id: 'm2', name: '林溪', color: MEMBER_PALETTE[1], avatar: MEMBER_AVATARS[1] },
+    { id: 'm3', name: '老周', color: MEMBER_PALETTE[2], avatar: MEMBER_AVATARS[2] },
+    { id: 'm4', name: '小美', color: MEMBER_PALETTE[3], avatar: MEMBER_AVATARS[3] },
+    { id: 'm5', name: '大宇', color: MEMBER_PALETTE[4], avatar: MEMBER_AVATARS[4] },
   ];
 
   return {

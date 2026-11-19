@@ -15,7 +15,7 @@ const mkMembers = (names: string[]): Member[] =>
     id: `m${i + 1}`,
     name,
     color: '#141413',
-    avatar: '🦊',
+    avatar: 'ink-solid',
   }));
 
 describe('金额字符串精确解析与格式化', () => {

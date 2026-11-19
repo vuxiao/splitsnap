@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import {
   ArrowRight,
   Check,
   CheckCircle2,
+  Copy,
   QrCode,
   Receipt,
   Sparkles,
 } from 'lucide-react';
 import type { Bill, Member, SettlementResult } from '../types/bill';
 import { formatMoney, formatSignedMoney } from '../core/money';
+import { buildShareUrl } from '../core/shareCodec';
 import { MemberAvatar } from './MemberAvatar';
 
 interface SettlementViewProps {
@@ -16,6 +19,41 @@ interface SettlementViewProps {
   onToggleSettled: (transferKey: string) => void;
   onOpenReceipt: () => void;
   onOpenShare: () => void;
+  onToast: (msg: string) => void;
+}
+
+export function buildGroupTextSummary(
+  bill: Bill,
+  settlement: SettlementResult
+): string {
+  const memberMap = new Map<string, Member>(bill.members.map((m) => [m.id, m]));
+  const settledSet = new Set(bill.settledKeys);
+  const lines: string[] = [];
+
+  lines.push(`【${bill.title} AA 结算】`);
+  lines.push(
+    `总计：${formatMoney(settlement.totalExpenseCents, bill.currency)}（${bill.members.length} 人 · ${bill.expenses.length} 笔消费）`
+  );
+  lines.push('──────────');
+
+  if (settlement.transfers.length === 0) {
+    lines.push('全员账目已平，无需转账 ✓');
+  } else {
+    lines.push(`最少转账方案（共 ${settlement.transfers.length} 笔）：`);
+    settlement.transfers.forEach((tr, i) => {
+      const from = memberMap.get(tr.fromId)?.name ?? tr.fromId;
+      const to = memberMap.get(tr.toId)?.name ?? tr.toId;
+      const status = settledSet.has(tr.key) ? ' [已结清]' : '';
+      lines.push(
+        `${i + 1}. ${from} → ${to}：${formatMoney(tr.amountCents, bill.currency)}${status}`
+      );
+    });
+  }
+
+  lines.push('──────────');
+  lines.push('查看完整明细与在线账单：');
+  lines.push(buildShareUrl(bill));
+  return lines.join('\n');
 }
 
 export function SettlementView({
@@ -24,7 +62,10 @@ export function SettlementView({
   onToggleSettled,
   onOpenReceipt,
   onOpenShare,
+  onToast,
 }: SettlementViewProps) {
+  const [copiedText, setCopiedText] = useState(false);
+
   const memberMap = new Map<string, Member>(bill.members.map((m) => [m.id, m]));
   const settledSet = new Set(bill.settledKeys);
   const completedCount = settlement.transfers.filter((t) =>
@@ -38,6 +79,25 @@ export function SettlementView({
     1,
     ...settlement.balances.map((b) => Math.abs(b.netCents))
   );
+
+  const handleCopyGroupText = async () => {
+    const summary = buildGroupTextSummary(bill, settlement);
+    try {
+      await navigator.clipboard.writeText(summary);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = summary;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopiedText(true);
+    onToast('群收款文字明细已复制，可直接粘贴发群');
+    setTimeout(() => setCopiedText(false), 2200);
+  };
 
   return (
     <div className="space-y-4">
@@ -126,14 +186,14 @@ export function SettlementView({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1 font-semibold text-sm text-[#141413]">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-sm text-[#141413]">
                             <MemberAvatar member={from} size="xs" />
                             <span className={isSettled ? 'line-through opacity-60' : ''}>
                               {from.name}
                             </span>
                           </span>
                           <ArrowRight className="w-3.5 h-3.5 text-[#9A958A] shrink-0" />
-                          <span className="inline-flex items-center gap-1 font-semibold text-sm text-[#141413]">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-sm text-[#141413]">
                             <MemberAvatar member={to} size="xs" />
                             <span className={isSettled ? 'line-through opacity-60' : ''}>
                               {to.name}
@@ -167,25 +227,50 @@ export function SettlementView({
           )}
         </div>
 
-        {/* 底部一键分享与热敏小票 */}
-        <div className="px-3.5 pb-3.5 grid grid-cols-2 gap-2.5">
+        {/* 底部一键分享、热敏小票与群收款文字复制 */}
+        <div className="px-3.5 pb-3.5 space-y-2">
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={onOpenReceipt}
+              data-testid="settlement-receipt-btn"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#141413] text-[#FFFDF9] text-xs font-semibold active:scale-95 transition cursor-pointer"
+            >
+              <Receipt className="w-4 h-4" />
+              生成热敏小票长图
+            </button>
+            <button
+              type="button"
+              onClick={onOpenShare}
+              data-testid="settlement-share-btn"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#F5F2EB] border border-[#DED8CC] text-[#141413] text-xs font-semibold active:scale-95 transition cursor-pointer"
+            >
+              <QrCode className="w-4 h-4 text-[#FF4D1A]" />
+              扫码分享给同桌
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={onOpenReceipt}
-            data-testid="settlement-receipt-btn"
-            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#141413] text-[#FFFDF9] text-xs font-semibold active:scale-95 transition cursor-pointer"
+            onClick={handleCopyGroupText}
+            data-testid="copy-group-text-btn"
+            className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-semibold active:scale-[0.99] transition cursor-pointer ${
+              copiedText
+                ? 'bg-[#E9F7F1] border-[#0D9468]/40 text-[#0D9468]'
+                : 'bg-[#FAF7F0] border-dashed border-[#CFC8BA] text-[#68645B] hover:text-[#141413] hover:border-[#141413]'
+            }`}
           >
-            <Receipt className="w-4 h-4" />
-            生成热敏小票长图
-          </button>
-          <button
-            type="button"
-            onClick={onOpenShare}
-            data-testid="settlement-share-btn"
-            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#F5F2EB] border border-[#DED8CC] text-[#141413] text-xs font-semibold active:scale-95 transition cursor-pointer"
-          >
-            <QrCode className="w-4 h-4 text-[#FF4D1A]" />
-            扫码分享给同桌
+            {copiedText ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                已复制群收款文字明细
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                复制群收款文字明细
+              </>
+            )}
           </button>
         </div>
       </section>

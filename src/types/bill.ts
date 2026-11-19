@@ -2,6 +2,7 @@ export interface Member {
   id: string;
   name: string;
   color: string;
+  /** 瑞士印刷体印章样式标识（兼容旧分享链接中的任意字符串） */
   avatar: string;
 }
 
@@ -60,28 +61,32 @@ export interface SettlementResult {
   savedTransferCount: number;
 }
 
+/**
+ * 严守瑞士热敏纸四色体系：暖纸白 + 炭黑墨 + 荧光信号橙 + 邮政绿（及暖灰墨变体）
+ */
 export const MEMBER_PALETTE = [
-  '#141413', // 炭黑
-  '#FF4D1A', // 复古荧光橙
-  '#0D9468', // 翠绿
-  '#2563EB', // 瑞士钴蓝
-  '#D97706', // 琥珀赭黄
-  '#7C3AED', // 绛紫
-  '#DB2777', // 玫瑰红
-  '#0891B2', // 青蓝
+  '#141413', // 炭黑墨
+  '#FF4D1A', // 荧光信号橙
+  '#0D9468', // 邮政绿
+  '#4A463F', // 深暖灰墨
+  '#141413', // 炭黑方章
+  '#FF4D1A', // 信号橙框章
+  '#0D9468', // 邮政绿框章
+  '#68645B', // 票据双环章
 ] as const;
 
+/**
+ * 8 款纯矢量瑞士印刷体印章样式标识（替代系统彩色 Emoji）
+ */
 export const MEMBER_AVATARS = [
-  '🦊',
-  '🐻',
-  '🐼',
-  '🐰',
-  '🐯',
-  '🦁',
-  '🐸',
-  '🐧',
-  '🦉',
-  '🐙',
-  '🐳',
-  '🦄',
+  'ink-solid',
+  'orange-ring',
+  'green-solid',
+  'ink-square',
+  'orange-solid',
+  'green-ring',
+  'slate-solid',
+  'paper-double',
 ] as const;
+
+export type SwissStampVariant = (typeof MEMBER_AVATARS)[number];

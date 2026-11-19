@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   BookmarkPlus,
   ChevronDown,
+  Info,
   Plus,
   QrCode,
   Receipt,
@@ -33,6 +34,7 @@ import {
   saveActiveBillId,
   saveLocalBills,
 } from './core/storage';
+import { generateIntroPosterImage } from './core/introPosterCanvas';
 import { MemberAvatar } from './components/MemberAvatar';
 import { ExpenseListView } from './components/ExpenseListView';
 import { SettlementView } from './components/SettlementView';
@@ -40,22 +42,34 @@ import { ExpenseSheet } from './components/ExpenseSheet';
 import { BillDrawer } from './components/BillDrawer';
 import { MembersModal } from './components/MembersModal';
 import { ShareModal, type ShareModalTab } from './components/ShareModal';
+import { IntroCover } from './components/IntroCover';
+import { IntroPosterModal } from './components/IntroPosterModal';
 
 type MainTab = 'expenses' | 'settlement';
 
-function initLocalState(): { bills: Bill[]; activeId: string } {
+declare global {
+  interface Window {
+    __generateIntroPoster?: (overrideUrl?: string) => Promise<string>;
+  }
+}
+
+function initLocalState(): {
+  bills: Bill[];
+  activeId: string;
+  hadSavedBills: boolean;
+} {
   const existing = loadLocalBills();
   if (existing.length > 0) {
     const savedActive = loadActiveBillId();
     const validActive = existing.some((b) => b.id === savedActive)
       ? (savedActive as string)
       : existing[0].id;
-    return { bills: existing, activeId: validActive };
+    return { bills: existing, activeId: validActive, hadSavedBills: true };
   }
   const sample = createSampleBill();
   saveLocalBills([sample]);
   saveActiveBillId(sample.id);
-  return { bills: [sample], activeId: sample.id };
+  return { bills: [sample], activeId: sample.id, hadSavedBills: false };
 }
 
 function initSharedFromUrl(): { bill: Bill | null; invalid: boolean } {
@@ -71,11 +85,17 @@ export default function App() {
   const initialShared = useMemo(() => initSharedFromUrl(), []);
 
   const [bills, setBills] = useState<Bill[]>(initialLocal.bills);
-  const [activeBillId, setActiveBillId] = useState<string>(initialLocal.activeId);
+  const [activeBillId, setActiveBillId] = useState<string>(
+    initialLocal.activeId
+  );
   const [sharedBill, setSharedBill] = useState<Bill | null>(initialShared.bill);
   const [invalidShareLink, setInvalidShareLink] = useState<boolean>(
     initialShared.invalid
   );
+
+  // 普通根地址访问默认先展示「瑞士小票产品介绍页」；带 #s= / ?s= 分享参数时一步直达账单
+  const [showIntro, setShowIntro] = useState<boolean>(!initialShared.bill);
+  const [introPosterOpen, setIntroPosterOpen] = useState<boolean>(false);
 
   const [mainTab, setMainTab] = useState<MainTab>(
     initialShared.bill ? 'settlement' : 'expenses'
@@ -92,6 +112,14 @@ export default function App() {
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
+  }, []);
+
+  // 暴露官方海报生成器以便构建脚本以相同字体与管线导出根目录 product-intro-qr.png
+  useEffect(() => {
+    window.__generateIntroPoster = generateIntroPosterImage;
+    return () => {
+      delete window.__generateIntroPoster;
+    };
   }, []);
 
   useEffect(() => {
@@ -123,6 +151,8 @@ export default function App() {
         setSharedBill(decoded);
         setInvalidShareLink(false);
         setFilterMemberId(null);
+        setShowIntro(false);
+        setMainTab('settlement');
       } else {
         setInvalidShareLink(true);
       }
@@ -277,7 +307,22 @@ export default function App() {
     setActiveBillId(sample.id);
     setFilterMemberId(null);
     setMainTab('expenses');
-    showToast('已生成示例账单，快体验最小转账算法');
+    setShowIntro(false);
+    showToast('已载入示例账单，可切换「结算方案」查看最少转账');
+  };
+
+  const handleEnterSampleFromIntro = () => {
+    const existingSample = bills.find((b) => b.title.includes('示例'));
+    if (existingSample) {
+      setSharedBill(null);
+      clearShareHash();
+      setActiveBillId(existingSample.id);
+      setFilterMemberId(null);
+      setMainTab('expenses');
+      setShowIntro(false);
+      return;
+    }
+    handleCreateSampleBill();
   };
 
   const handleSelectBill = (billId: string) => {
@@ -303,6 +348,33 @@ export default function App() {
     setShareModalTab(tab);
     setShareModalOpen(true);
   };
+
+  // 首屏「瑞士热敏小票产品介绍页」
+  if (showIntro) {
+    return (
+      <>
+        <IntroCover
+          hasExistingSession={initialLocal.hadSavedBills || bills.length > 1}
+          onStartNow={() => setShowIntro(false)}
+          onTrySample={handleEnterSampleFromIntro}
+          onOpenPoster={() => setIntroPosterOpen(true)}
+        />
+
+        {/* 安全区顶部居中 Toast */}
+        {toastMsg && (
+          <div className="fixed top-[max(12px,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-[70] pointer-events-none max-w-[350px] w-max px-4 py-2 rounded-full bg-[#141413] text-[#FFFDF9] border border-white/15 text-xs font-semibold shadow-[0_8px_24px_rgba(20,20,19,0.28)]">
+            {toastMsg}
+          </div>
+        )}
+
+        <IntroPosterModal
+          open={introPosterOpen}
+          onClose={() => setIntroPosterOpen(false)}
+          onToast={showToast}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-dvh w-full flex justify-center bg-[#E4DFD5]">
@@ -362,13 +434,13 @@ export default function App() {
         )}
 
         {/* 顶部导航栏 */}
-        <header className="sticky top-0 z-30 bg-[#F5F2EB]/92 backdrop-blur-md border-b border-[#DED8CC] px-4 pt-safe pb-2.5">
+        <header className="sticky top-0 z-30 bg-[#F5F2EB]/95 backdrop-blur-md border-b border-[#DED8CC] px-4 pt-safe pb-2.5">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               data-testid="bill-switcher-btn"
               onClick={() => setBillDrawerOpen(true)}
-              className="flex items-center gap-2 min-w-0 py-1 pr-2 rounded-xl hover:bg-[#EAE5DA] active:scale-[0.98] transition cursor-pointer"
+              className="flex items-center gap-2 min-w-0 py-1 pr-1.5 rounded-xl hover:bg-[#EAE5DA] active:scale-[0.98] transition cursor-pointer"
             >
               <span className="w-8 h-8 rounded-xl bg-[#141413] text-[#FFFDF9] flex items-center justify-center font-mono font-bold text-xs shrink-0">
                 SS
@@ -377,14 +449,14 @@ export default function App() {
                 <div className="flex items-center gap-1">
                   <h1
                     data-testid="current-bill-title"
-                    className="text-[15px] font-bold text-[#141413] truncate max-w-[175px]"
+                    className="text-[15px] font-bold text-[#141413] truncate max-w-[148px]"
                   >
                     {currentBill.title}
                   </h1>
                   <ChevronDown className="w-4 h-4 text-[#68645B] shrink-0" />
                 </div>
-                <div className="text-[10px] font-mono text-[#68645B] tracking-wider">
-                  SPLITSNAP · {currentBill.receiptNo}
+                <div className="text-[10px] font-mono text-[#68645B] tracking-wider whitespace-nowrap truncate max-w-[162px]">
+                  NO.{currentBill.receiptNo}
                 </div>
               </div>
             </button>
@@ -392,9 +464,19 @@ export default function App() {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
+                data-testid="open-intro-btn"
+                onClick={() => setShowIntro(true)}
+                title="关于产品 / 推荐给朋友"
+                aria-label="关于产品与推荐海报"
+                className="w-8 h-8 rounded-xl bg-[#FFFDF9] border border-[#DED8CC] text-[#68645B] hover:text-[#141413] flex items-center justify-center active:scale-95 transition cursor-pointer"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
                 data-testid="open-members-btn"
                 onClick={() => setMembersModalOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#FFFDF9] border border-[#DED8CC] text-xs font-semibold text-[#141413] active:scale-95 transition cursor-pointer"
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-xl bg-[#FFFDF9] border border-[#DED8CC] text-xs font-semibold text-[#141413] active:scale-95 transition cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5 text-[#68645B]" />
                 <span className="tabular-money">{currentBill.members.length}</span>
@@ -403,7 +485,7 @@ export default function App() {
                 type="button"
                 data-testid="top-share-btn"
                 onClick={() => openShareModal('share')}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#141413] text-[#FFFDF9] text-xs font-semibold active:scale-95 transition cursor-pointer"
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-xl bg-[#141413] text-[#FFFDF9] text-xs font-semibold active:scale-95 transition cursor-pointer"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 <span>分享</span>
@@ -412,8 +494,8 @@ export default function App() {
           </div>
         </header>
 
-        {/* 主体内容滚动区 */}
-        <main className="flex-1 px-4 pt-3.5 pb-28 space-y-4">
+        {/* 主体内容滚动区（pb-36 确保滑到底部绝不被悬浮操作栏遮挡） */}
+        <main className="flex-1 px-4 pt-3.5 pb-36 space-y-4">
           {/* 热敏纸锯齿 Hero 汇总卡（瑞士网格 3 列 KPI + 成员实时净额） */}
           <section className="bg-[#FFFDF9] border border-[#DED8CC] rounded-t-2xl receipt-zig-zag-bottom shadow-[0_2px_10px_rgba(20,20,19,0.05)]">
             <div className="p-4">
@@ -452,12 +534,12 @@ export default function App() {
                 )}
               </div>
 
-              {/* 瑞士网格 3 列 KPI */}
+              {/* 瑞士网格 3 列 KPI（紧凑对称等宽排版） */}
               <div className="mt-3.5 pt-3 border-t border-dashed border-[#DED8CC] grid grid-cols-3 gap-2">
                 <div>
                   <div className="text-[10px] font-mono text-[#9A958A]">消费笔数</div>
-                  <div className="tabular-money text-base font-bold text-[#141413] mt-0.5">
-                    {currentBill.expenses.length}{' '}
+                  <div className="tabular-money text-base font-bold text-[#141413] mt-0.5 flex items-baseline gap-1">
+                    <span>{currentBill.expenses.length}</span>
                     <span className="text-[11px] font-sans font-normal text-[#68645B]">
                       笔
                     </span>
@@ -465,22 +547,31 @@ export default function App() {
                 </div>
                 <div className="border-l border-dashed border-[#E5E0D5] pl-2.5">
                   <div className="text-[10px] font-mono text-[#9A958A]">待结转账</div>
-                  <div className="tabular-money text-base font-bold text-[#FF4D1A] mt-0.5">
-                    {unsettledTransferCount}{' '}
-                    <span className="text-[11px] font-sans font-normal text-[#68645B]">
-                      / {settlement.transfers.length} 笔
+                  <div
+                    data-testid="kpi-unsettled"
+                    className="tabular-money text-base font-bold mt-0.5 flex items-baseline"
+                  >
+                    <span className="text-[#FF4D1A]">{unsettledTransferCount}</span>
+                    <span className="text-[#9A958A] text-xs mx-1 font-normal">/</span>
+                    <span className="text-[#141413]">{settlement.transfers.length}</span>
+                    <span className="text-[11px] font-sans font-normal text-[#68645B] ml-1">
+                      笔
                     </span>
                   </div>
                 </div>
                 <div className="border-l border-dashed border-[#E5E0D5] pl-2.5">
                   <div className="text-[10px] font-mono text-[#9A958A]">算法精简</div>
-                  <div className="tabular-money text-base font-bold text-[#0D9468] mt-0.5">
-                    {settlement.savedTransferCount > 0
-                      ? `-${settlement.savedTransferCount}`
-                      : '最优'}{' '}
-                    <span className="text-[11px] font-sans font-normal text-[#68645B]">
-                      {settlement.savedTransferCount > 0 ? '笔' : ''}
+                  <div className="tabular-money text-base font-bold text-[#0D9468] mt-0.5 flex items-baseline gap-1">
+                    <span>
+                      {settlement.savedTransferCount > 0
+                        ? `-${settlement.savedTransferCount}`
+                        : '最优'}
                     </span>
+                    {settlement.savedTransferCount > 0 && (
+                      <span className="text-[11px] font-sans font-normal text-[#68645B]">
+                        笔
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -596,18 +687,19 @@ export default function App() {
               onToggleSettled={handleToggleSettled}
               onOpenReceipt={() => openShareModal('receipt')}
               onOpenShare={() => openShareModal('share')}
+              onToast={showToast}
             />
           )}
         </main>
 
-        {/* 底部单手拇指悬浮操作栏 */}
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-30 pointer-events-none px-4 pb-safe pt-2 bg-gradient-to-t from-[#F5F2EB] via-[#F5F2EB]/95 to-transparent">
-          <div className="pointer-events-auto flex items-center gap-2.5">
+        {/* 底部干净悬浮胶囊底座（无脏糊渐变遮罩） */}
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-30 pointer-events-none px-4 pb-safe">
+          <div className="pointer-events-auto flex items-center gap-2 p-1.5 rounded-[22px] bg-[#FFFDF9]/96 backdrop-blur-md border border-[#DED8CC] shadow-[0_10px_30px_rgba(20,20,19,0.14)]">
             <button
               type="button"
               data-testid="bottom-receipt-btn"
               onClick={() => openShareModal('receipt')}
-              className="h-13 px-3.5 rounded-2xl bg-[#FFFDF9] border border-[#DED8CC] text-[#141413] flex flex-col items-center justify-center gap-0.5 shadow-sm active:scale-95 transition shrink-0 cursor-pointer"
+              className="h-12 px-3.5 rounded-2xl bg-[#F5F2EB] text-[#141413] flex flex-col items-center justify-center gap-0.5 active:scale-95 transition shrink-0 cursor-pointer"
             >
               <Receipt className="w-4 h-4 text-[#141413]" />
               <span className="text-[10px] font-bold">小票图</span>
@@ -620,7 +712,7 @@ export default function App() {
                 setEditingExpense(null);
                 setExpenseSheetOpen(true);
               }}
-              className="flex-1 h-13 rounded-2xl bg-[#FF4D1A] text-white font-bold text-[15px] flex items-center justify-center gap-2 shadow-[0_8px_22px_rgba(255,77,26,0.34)] active:scale-[0.98] transition cursor-pointer"
+              className="flex-1 h-12 rounded-2xl bg-[#FF4D1A] text-white font-bold text-[15px] flex items-center justify-center gap-2 shadow-[0_6px_16px_rgba(255,77,26,0.3)] active:scale-[0.98] transition cursor-pointer"
             >
               <Plus className="w-5 h-5 stroke-[2.8]" />
               <span>记一笔</span>
@@ -630,7 +722,7 @@ export default function App() {
               type="button"
               data-testid="bottom-share-btn"
               onClick={() => openShareModal('share')}
-              className="h-13 px-3.5 rounded-2xl bg-[#FFFDF9] border border-[#DED8CC] text-[#141413] flex flex-col items-center justify-center gap-0.5 shadow-sm active:scale-95 transition shrink-0 cursor-pointer"
+              className="h-12 px-3.5 rounded-2xl bg-[#F5F2EB] text-[#141413] flex flex-col items-center justify-center gap-0.5 active:scale-95 transition shrink-0 cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-[#FF4D1A]" />
               <span className="text-[10px] font-bold">扫码享</span>
@@ -638,9 +730,9 @@ export default function App() {
           </div>
         </div>
 
-        {/* Toast 提示 */}
+        {/* 安全区顶部居中悬浮 Toast（不压在导航栏与卡片交界线上） */}
         {toastMsg && (
-          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] w-max px-4 py-2 rounded-full bg-[#141413] text-[#FFFDF9] text-xs font-semibold shadow-lg">
+          <div className="fixed top-[max(12px,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-[70] pointer-events-none max-w-[350px] w-max px-4 py-2 rounded-full bg-[#141413] text-[#FFFDF9] border border-white/15 text-xs font-semibold shadow-[0_8px_24px_rgba(20,20,19,0.28)]">
             {toastMsg}
           </div>
         )}
@@ -686,6 +778,12 @@ export default function App() {
           bill={currentBill}
           settlement={settlement}
           onClose={() => setShareModalOpen(false)}
+          onToast={showToast}
+        />
+
+        <IntroPosterModal
+          open={introPosterOpen}
+          onClose={() => setIntroPosterOpen(false)}
           onToast={showToast}
         />
       </div>

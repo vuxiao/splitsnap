@@ -142,7 +142,7 @@ export function ExpenseListView({
                       <span
                         className={`px-1.5 py-0.5 rounded-md font-medium ${
                           exp.splitMode === 'custom'
-                            ? 'bg-[#EEF2FF] text-[#3730A3]'
+                            ? 'bg-[#141413] text-[#FFFDF9]'
                             : excludedMembers.length > 0
                               ? 'bg-[#FFF0EB] text-[#C2360F]'
                               : 'bg-[#F5F2EB] text-[#68645B]'
